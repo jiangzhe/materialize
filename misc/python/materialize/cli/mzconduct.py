@@ -518,6 +518,9 @@ class Workflow:
     def mzcompose_up(self, services: List[str]) -> None:
         mzcompose_up(services, self._docker_extra_args(), extra_env=self.env)
 
+    def mzcompose_remove(self, services: List[str]) -> None:
+        mzcompose_remove(services, self._docker_extra_args(), extra_env=self.env)
+
     def mzcompose_restart(self, services: List[str]) -> None:
         mzcompose_restart(services, self._docker_extra_args(), extra_env=self.env)
 
@@ -633,6 +636,27 @@ class StartServicesStep(WorkflowStep):
         except subprocess.CalledProcessError:
             services = ", ".join(self._services)
             raise Failed(f"ERROR: services didn't come up cleanly: {services}")
+
+
+@Steps.register("remove-services")
+class RemoveServicesStep(WorkflowStep):
+    """
+    Params:
+      services: List of service names
+    """
+
+    def __init__(self, path: Path, *, services: Optional[List[str]] = None) -> None:
+        super().__init__(path)
+        self._services = services if services is not None else []
+        if not isinstance(self._services, list):
+            raise BadSpec(f"services should be a list, got: {self._services}")
+
+    def run(self, comp: Composition, workflow: Workflow) -> None:
+        try:
+            workflow.mzcompose_remove(self._services)
+        except subprocess.CalledProcessError:
+            services = ", ".join(self._services)
+            raise Failed(f"ERROR: services didn't remove cleanly: {services}")
 
 
 @Steps.register("restart-services")
@@ -1306,6 +1330,18 @@ def mzcompose_up(
     if args is None:
         args = []
     cmd = ["bin/mzcompose", "--mz-quiet", *args, "up", "-d"]
+    return spawn.runv(cmd + services, env=_merge_env(extra_env))
+
+
+def mzcompose_remove(
+    services: List[str],
+    args: Optional[List[str]] = None,
+    extra_env: Optional[Dict[str, str]] = None,
+) -> subprocess.CompletedProcess:
+    if args is None:
+        args = []
+    cmd = ["bin/mzcompose", "--mz-quiet", *args, "rm", "-fv"]
+    print("CWD:", os.getcwd())
     return spawn.runv(cmd + services, env=_merge_env(extra_env))
 
 
